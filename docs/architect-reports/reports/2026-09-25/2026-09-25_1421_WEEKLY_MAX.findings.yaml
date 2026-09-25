@@ -1,0 +1,813 @@
+schema_version: "1.0"
+prompt_version: "1.0"
+run:
+  run_id: "2026-09-25_1421_WEEKLY_MAX"
+  slot: WEEKLY
+  level: MAX
+  model: "claude-fable-5-1"
+  started_at: "2026-09-25T14:21:37+00:00"
+  repo:
+    branch: desarrollo-agentico
+    head_sha: "83e315e3713b3734c59c72cc9c97bf8925a561ea"
+    main_sha: "2d17df8da1536c121e4d7395ac5a5dcec9e96d6f"
+    open_prs: [1, 22, 23, 24, 25]
+    notes: >
+      head_sha es el commit de línea base del orquestador (solo añade docs/architect-reports/).
+      El código auditado es idéntico a 794d3662d015a803dff0c6f7912a9d8a65e1a697, referencia del INFORME-BASE.
+      Ramas feature auditadas en worktrees de solo lectura: PR #22 = 785e85de0efaa1dae09fd9f02216d4b1aede7a08,
+      PR #25 = a973ba71f68aefb0a3d05d7f30a2ea0fd2cabbf1 (superconjunto de #23 437539f y #24 23b9a7c).
+  previous_run_id: null
+  since_sha: null
+  tools_available: [git, shell, python-venv, pytest, ruff, mypy, github-api-mcp]
+  tools_missing: [gh-cli, windows-host, github-projects, upstream-remote]
+  environment: "contenedor Linux (UTC), Python 3.11.15 en .venv-audit; CI usa 3.10-3.13"
+  scope_reviewed:
+    - "CLAUDE.md, .claude/skills/dev-loop.md"
+    - "scripts/*.py (6 archivos, lectura íntegra)"
+    - "tests/architecture/*.py (mutation test ejecutado)"
+    - ".github/workflows/ci.yml, pyproject.toml, .gitignore, docker-compose.yml, Dockerfile"
+    - "docs/control-plane/* (19 archivos, lectura íntegra)"
+    - "docs/00-product … 13-roadmap, docs/README.md, docs/integracion-schwab.md, docs/AM-TRADINGAGENTS-FRONTEND-SPEC.md (grep dirigido)"
+    - "tradingagents/execution/*, tradingagents/dataflows/schwab.py"
+    - "apps/web/* (dashboard + scripts Windows)"
+    - "PR #22 diff completo; PR #23/#24/#25 árbol app/, alembic/, tests/ (lectura íntegra, ejecución de sus tests)"
+    - "GitHub: PRs (#1, #22-#25), check runs, logs de jobs fallidos, issues #2-#21"
+    - "Suite upstream ejecutada: 945 passed, 1 failed (red), 2 skipped"
+  scope_not_reviewed:
+    - "rama prod-desarrollo-agentico (excluida por decisión del humano)"
+    - "frontend/ y src/ (borradores Next.js): solo inventariados, no compilados"
+    - "tradingagents/ upstream (~9.400 LOC): solo grep dirigido + suite de tests; sin revisión línea a línea"
+    - "CHANGELOG.md, README.md upstream"
+    - "máquina Windows del operador (procesos, servicios, puerto 8888, venv local)"
+    - "GitHub Project users/orisonsoto/projects/1 y remote upstream (sin herramienta)"
+summary:
+  counts: {S0: 0, S1: 6, S2: 10, S3: 6, S4: 0}
+  top_risks:
+    - PR-infra0001-breaks-upstream
+    - LOOP-unrestricted-file-writes
+    - CI-architecture-job-uncollectable
+    - VALIDATOR-unicode-exit-on-windows
+    - TEST-pr-tests-missing-fixtures
+recheck:
+  - id: PR-infra0001-breaks-upstream
+    verdict: still_open
+    evidence: >
+      executed: git diff origin/desarrollo-agentico...origin/feature/US-INFRA-0001-… -- pyproject.toml
+      tradingagents/__init__.py → pyproject reescrito (name=am-tradingagents, requires-python>=3.12, sin langchain/
+      langgraph/pandas/yfinance, sin [project.scripts]); __init__.py -37/+1. Mecanismo adicional verificado: la rama
+      añade tradingagents/portfolio/__init__.py vacío que TAPA a tradingagents/portfolio.py; en el worktree de #22
+      `import tradingagents.portfolio` resuelve al paquete vacío → ImportError PortfolioContext e `import cli.main`
+      falla. CI #22 run 35937667421: clean-install smoke "Failed to build … when getting requirements to build wheel".
+  - id: LOOP-unrestricted-file-writes
+    verdict: still_open
+    evidence: >
+      static-read: scripts/local_model.py:169-199 parse_and_write_files → :177 filepath = line[5:], :190 full_path =
+      ROOT / filepath, :193 write_text sin validar contra allowed_modules/protected_modules ni rechazar '..' o rutas
+      absolutas. Ningún script lee allowed_modules/required_tests (lectura íntegra de scripts/). Efecto en #22-#25:
+      tests/conftest.py, docker-compose.yml, scripts/local_model.py, .github/workflows/ci.yml reescritos (git diff --name-status).
+  - id: LOOP-branch-contamination
+    verdict: still_open
+    evidence: >
+      static-read: scripts/pr_creator.py:64 `git checkout -b` desde el HEAD actual; :67/:73 stage de todo `git status
+      --porcelain`; :136 --base main. executed: git merge-base --is-ancestor INFRA-0001 INFRA-0003 → no;
+      git log desarrollo-agentico..US-AGENT-0001 → 3 commits (incluye #23 y #24); #25 = 55 archivos +2780/-93
+      incl. apps/web/dev-dashboard.html y apps/web/server.py.
+  - id: LOOP-no-success-writeback
+    verdict: still_open
+    evidence: >
+      static-read: scripts/autonomous_loop.py:172-175 (éxito: close_issue + stories_done, sin tocar stories.yaml);
+      no existe mark_story_done ni estado IN_REVIEW en el loop. Consistente con stories.yaml:62/123/184/214 DONE
+      marcados a mano.
+  - id: STORY-done-with-red-ci
+    verdict: still_open
+    evidence: >
+      executed (GitHub API 2026-09-25): #22 → tests 3.10-3.13, smoke, ruff, mypy FAIL; #23/#24/#25 → tests 3.10-3.13,
+      architecture, ruff, secret scan FAIL (mypy y smoke success). stories.yaml:62,123,184,214 status: DONE.
+  - id: CI-architecture-job-uncollectable
+    verdict: still_open
+    evidence: >
+      executed: pytest tests/architecture -m "architecture or traceability" → "'architecture' not found in `markers`"
+      (pyproject.toml:53 --strict-markers, :54-58 solo unit/integration/smoke). Impacto MAYOR que el reportado:
+      CI de PR #1 (run 36147223492 sobre 83e315e) — los 4 jobs `tests` (pytest -q, ci.yml:30) y el job `secret scan`
+      (ci.yml:105) mueren en la misma colección (exit 2 / exit 4, logs GitHub). Con --strict-markers desactivado
+      (-o addopts="") los 18 tests corren: 17 passed, 1 FAILED (ver TEST-md-story-id-us-api-0003-dangling).
+  - id: VALIDATOR-pytest-broken-env
+    verdict: still_open
+    evidence: >
+      executed: sin pytest-timeout instalado, `pytest tests/architecture --timeout=60 --co` → exit 4 (unrecognized
+      arguments); pyproject.toml:31-35 dev extras sin pytest-timeout. tests/unit/ no existe en desarrollo-agentico →
+      validate_story.py:69-75 cae siempre al patrón "tests/" (suite upstream completa con -x). required_tests nunca se lee.
+  - id: ENV-dev-environment-incomplete
+    verdict: not_reproducible
+    evidence: >
+      executed en contenedor Linux: python3.11 -m venv + pip install -e ".[dev]" mypy pytest-timeout → OK; pytest --co
+      948 tests (+2 errores de colección de tests/architecture); suite completa sin tests/architecture: 945 passed,
+      1 failed (tests/test_no_data_handling.py::…::test_empty_download_raises_and_does_not_cache, Yahoo inalcanzable
+      por red), 2 skipped, 88 subtests. Los 62 errores de colección del informe describen la máquina Windows del
+      operador (sin venv), que no puedo inspeccionar. Existe línea base verde reproducible; falta documentarla.
+  - id: DEPS-undeclared-runtime-deps
+    verdict: still_open
+    evidence: >
+      executed: git diff --name-status desarrollo-agentico...US-AGENT-0001 no toca pyproject.toml ni requirements.txt;
+      app/ importa fastapi, sqlalchemy(.ext.asyncio → requiere greenlet), pydantic, jwt, pandas; alembic/ importa
+      alembic. Al ejecutar sus tests con deps instaladas a mano aún falta greenlet ("SQLAlchemy asyncio module
+      requires … greenlet").
+  - id: LOOP-fix-loop-blind
+    verdict: still_open
+    evidence: >
+      static-read: scripts/autonomous_loop.py:83-84 pasa result.stderr como --prompt; scripts/validate_story.py:145,
+      149-158 imprime resumen JSON y "=== FAILURE SUMMARY ===" por stdout; scripts/local_model.py:228 `args.prompt or
+      sys.stdin.read()`. .claude/skills/dev-loop.md STEP 6 usa `2>&1` (contrato distinto al del loop). Ver además
+      VALIDATOR-unicode-exit-on-windows: en Windows el stderr que sí llega es un traceback de UnicodeEncodeError.
+  - id: LOOP-no-failure-evidence
+    verdict: still_open
+    evidence: >
+      executed: `ls .orchestrator` → no existe. static-read: autonomous_loop.py:26 capture_output=True y la salida se
+      descarta en :143-181 (solo se imprime "[BLOCKED] …"); checkpoint.py no es invocado por ningún script.
+  - id: LOOP-slm-context-starvation
+    verdict: still_open
+    evidence: >
+      static-read: scripts/local_model.py:71-84 lee la prosa de docs/11-user-stories/initial-20-stories.md (no
+      stories.yaml); :87-100 recorta cada doc a text[:1500] (:98); docs/12-adr/README.md es solo catálogo. El prompt
+      nunca incluye allowed_modules, required_tests ni el layout apps/api.
+  - id: STORY-contract-noncompliance-done
+    verdict: still_open
+    evidence: >
+      executed: git diff --name-status: #22 escribe tradingagents/{events,learning,oms,portfolio,risk}/__init__.py,
+      scripts/check_architecture.py, apps/, migrations/ (stories.yaml:67-74 allowed_modules = pyproject, setup.py,
+      .github/workflows/, .gitignore, Makefile, docs/, tests/) y no crea tests/unit/test_infra_0001_ci_smoke.py
+      (:76-77). #23 crea app/ y tests/unit/test_health_endpoint.py (allowed :129-132 apps/api/, tradingagents/api/,
+      tests/unit/api/; required :136-138 tests/unit/api/test_health.py, test_infra_0003.py ausentes).
+  - id: LOOP-no-independent-review
+    verdict: still_open
+    evidence: >
+      static-read: scripts/autonomous_loop.py:124-186 main(): pick → implement → validate/fix → create_pr → close_issue.
+      No hay paso reviewer_agent ni architecture_guardian (docs/control-plane/review-model.md:5-22,
+      model-registry.yaml:53-68 los definen). El fix-loop (local_model.py --mode fix) puede reescribir tests.
+  - id: LOOP-issues-closed-falsely
+    verdict: still_open
+    evidence: >
+      executed (GitHub API 2026-09-25): issues #2-#21 → 20 CLOSED. static-read: autonomous_loop.py:150 (skip),
+      :160 (implement failed), :168 (validation failed), :174 (PR created), :180 (PR failed) llaman close_issue.
+  - id: SEC-jwt-secret-not-configurable
+    verdict: still_open
+    evidence: >
+      static-read (#23-#25): app/core/config.py:8 `class Settings(BaseModel)` (pydantic, no pydantic-settings), :14
+      jwt_secret default "change-me-in-production"; app/core/security.py:35-36 Settings() por petición, :42
+      detail=f"Token validation failed: {exc}"; app/db/config.py:14 password default; alembic.ini:4 DSN con
+      credenciales. tests/unit/test_unauthorized_returns_401.py solo cubre sin token y token basura.
+  - id: VALIDATOR-scope-mismatch
+    verdict: still_open
+    evidence: >
+      static-read: scripts/validate_story.py:42,47,50,61 apuntan a tradingagents/ y apps/ (app/ nunca se valida);
+      :47 `ruff --fix` sobre árboles completos. executed: ruff en #25 reporta 119 errores (107 auto-fixables) que el
+      validador habría "arreglado" fuera del alcance de la story.
+  - id: VALIDATOR-arch-check-weak
+    verdict: still_open
+    evidence: >
+      executed: con el chequeo de validate_story.py:100 un archivo cuya única mención es el comentario
+      "# do not import tradingagents.execution here" queda FLAGGED (falso positivo) y `from tradingagents import
+      execution as ex` NO se detecta (falso negativo). Solo 2 reglas (:28-32) frente a 8 tests AST en tests/architecture.
+  - id: TEST-secret-scan-blind-spot
+    verdict: still_open
+    evidence: >
+      static-read: tests/architecture/test_fitness.py:235 recorre solo TRADINGAGENTS.rglob("*.py"); patrones :226-232
+      (el de OpenAI `sk-[A-Za-z0-9]{48}` no cubre claves `sk-proj-…`). executed: el job secret-scan de CI ni siquiera
+      colecta hoy (marcadores), run 36147223492 exit 4.
+  - id: DATA-stories-yaml-mojibake
+    verdict: still_open
+    evidence: >
+      executed: grep -c 'Ã\|â€' docs/control-plane/stories.yaml → 10 líneas; `git log -S'AgÃ©ntico'` → introducido
+      por 1a9455f "fix(encoding)…" (el commit que quiso arreglar la codificación la rompió al reserializar);
+      scripts/story_picker.py:34 `open(STORIES_YAML)` sin encoding.
+  - id: DOCS-no-adrs
+    verdict: still_open
+    evidence: "executed: ls docs/12-adr → solo README.md (catálogo ADR-0001..0010, todos status draft en front-matter)."
+  - id: ARCH-layout-and-frontend-duplication
+    verdict: still_open
+    evidence: >
+      executed: git ls-files → frontend/ (25 archivos), src/ (9), apps/web (6) en desarrollo-agentico; en #23-#25
+      app/ (32 archivos) vs apps/api/ declarado en stories.yaml:130,500,528 y component-ownership.yaml:686.
+      Además tres DeclarativeBase (ver ARCH-three-declarative-bases-no-migrations).
+  - id: PROCESS-branching-and-fork-strategy
+    verdict: still_open
+    evidence: >
+      executed (GitHub API): #1, #22, #23, #24, #25 todos con base main; PR #1 lleva 95 archivos y CI rojo.
+      static-read: pr_creator.py:136 --base main; dev-loop.md "Return to main branch after each PR";
+      CLAUDE.md:4 "Branch activo: desarrollo-agentico". No hay remote upstream en el clon auditado.
+  - id: LOOP-blind-retries
+    verdict: still_open
+    evidence: >
+      static-read con precisión corregida: autonomous_loop.py:20-42 reintenta UNA vez solo ante TimeoutExpired
+      (:35-41); la rama "check and returncode != 0" es código muerto porque todos los callers pasan check=False.
+      El reintento por timeout es ciego: relanza implement (600 s) y pr_creator (push) sin diagnóstico; un segundo
+      timeout devuelve None y pick_story lo reporta como "[DONE] All stories processed" (:49-60, :131-134).
+  - id: LOOP-pr-metadata-wrong
+    verdict: still_open
+    evidence: "static-read: scripts/pr_creator.py:82 Co-Authored-By fijo; scripts/autonomous_loop.py:93 título derivado del ID."
+  - id: CI-mypy-non-blocking
+    verdict: still_open
+    evidence: >
+      static-read: .github/workflows/ci.yml:76 `|| true`. executed: mypy tradingagents/ --ignore-missing-imports →
+      177 errores en 22 archivos (upstream); el job mypy de PR #1 aparece "success".
+  - id: OPS-dashboard-not-persistent
+    verdict: not_reproducible
+    evidence: >
+      Requiere la máquina Windows del operador (servicio, Inicio, puerto 8888). static-read: rutas fijas
+      C:\Ia-projects\AM-TradingAgents en apps/web/dashboard-persistent.ps1:10, start-dashboard-service.ps1:13,
+      start-dashboard.ps1:9, start-dashboard.bat:12. Defecto adicional verificado en OPS-dashboard-shows-mock-data.
+  - id: H-data-yfinance-licensing
+    verdict: still_open
+    evidence: >
+      Hipótesis de negocio/legal, no verificable por código. Evidencia de dependencia operativa: 1 test upstream
+      (tests/test_no_data_handling.py) requiere Yahoo en vivo; #24 app/dataflows/ingestion.py:61-62 ignora el
+      parámetro vendor y llama siempre a _fetch_yfinance.
+  - id: H-agent-prompt-injection-via-news
+    verdict: still_open
+    evidence: >
+      static-read upstream: trader (agents/trader/trader.py:23) y PM (agents/managers/portfolio_manager.py:27) usan
+      salida estructurada (bind_structured) → mitiga parcialmente la manipulación del formato, no del contenido;
+      los informes de noticias/sentimiento (agents/analysts/news_analyst.py, sentiment_analyst.py) se inyectan como
+      texto libre en prompts posteriores; no hay marcado de "datos no confiables" ni pruebas adversariales.
+  - id: H-risk-oms-toctou-idempotency
+    verdict: still_open
+    evidence: >
+      Sin código de Risk/OMS. static-read: tradingagents/execution/broker_base.py:61 client_order_id opcional
+      (default None) → la clave de idempotencia no es obligatoria en el contrato de orden.
+  - id: H-tenant-isolation-design
+    verdict: still_open
+    evidence: >
+      Sin ADR-0014. Primer código real (#25) viola el aislamiento: ver SEC-runs-endpoint-unauthenticated-tenant-hardcoded.
+  - id: H-money-time-calendar
+    verdict: still_open
+    evidence: >
+      static-read: broker_base.py:53-59,70 usa float para cantidades y precios; #25 confidence Numeric(4,4) y
+      datetime.utcnow() naive en columnas timezone=True (ver PR-agent0001-orm-types-unpersistable); #24 gaps por
+      días naturales (ver PR-data0001-gap-validator-and-symbol-regex).
+  - id: H-reproducibility-nondeterminism
+    verdict: still_open
+    evidence: >
+      El contrato de reproducibilidad no está conectado a nada y ya deriva: ver DOCS-model-registry-drift y
+      DOCS-enum-drift-mode-action. DecisionTrace sin implementar.
+  - id: H-upstream-drift
+    verdict: still_open
+    evidence: >
+      executed: origin/main = 2d17df8 "Merge pull request #1364 from TauricResearch/v0.5.0"; el clon no tiene remote
+      upstream. #22 demuestra el riesgo: reemplaza pyproject.toml y __init__.py upstream en vez de extenderlos.
+findings:
+  # ---------------------------------------------------------------- S1 ----
+  - id: VALIDATOR-unicode-exit-on-windows
+    title: "validate_story.py termina con UnicodeEncodeError en Windows aunque todos los checks pasen"
+    area: validator
+    severity: S1
+    confidence: medium
+    verification: executed
+    evidence:
+      - {kind: file, path: "scripts/validate_story.py", lines: "160", note: "print(\"\\n✓ All checks passed.\") — U+2713 no existe en cp1252"}
+      - {kind: file, path: "scripts/autonomous_loop.py", lines: "26", note: "subprocess.run(capture_output=True, text=True) sin encoding → el hijo escribe a una tubería con la codificación de la consola de Windows"}
+      - {kind: command, cmd: "PYTHONIOENCODING=cp1252 python -c 'print(\"\\n✓ All checks passed.\")'", output: "UnicodeEncodeError: 'charmap' codec can't encode character '\\u2713'", note: "simulación en Linux de la tubería cp1252 de Windows"}
+    why_it_matters: >
+      En la máquina del operador (Windows, sin PYTHONUTF8=1) el validador solo llega a la línea 160 cuando TODO pasó;
+      ahí lanza un traceback y sale con código 1. El loop lo interpreta como fallo, entra en el fix-loop con un prompt
+      que es el traceback (stderr), y tras 3 rondas marca BLOCKED_AUTOMATION. Explica bloqueos "inexplicables" sin
+      culpar al modelo.
+    root_cause: "Salida no ASCII en un script que se consume por tubería en Windows; ningún subprocess fija encoding='utf-8'."
+    recommendation: >
+      Sustituir "✓" por texto ASCII; en autonomous_loop.run() y pr_creator.run() usar subprocess.run(…, encoding="utf-8",
+      errors="replace"); exportar PYTHONUTF8=1 en los scripts de arranque; test: ejecutar validate_story con
+      PYTHONIOENCODING=cp1252 y exigir exit 0 en el camino verde.
+    owner_suggestion: sonnet
+    delegable_to_local_model: "no"
+    requires_human_decision: false
+    human_decision_question: null
+    prerequisites: []
+    work_order: null
+    related: [LOOP-fix-loop-blind, DATA-stories-yaml-mojibake]
+    effort: S
+  - id: PR-agent0001-service-nameerror
+    title: "TradingRunService no importa DomainEvent: el módulo lanza NameError al importarse"
+    area: code
+    severity: S1
+    confidence: high
+    verification: executed
+    evidence:
+      - {kind: file, path: "app/services/trading_run_service.py", lines: "9-18,123", note: "PR #25 a973ba7: la anotación `event: DomainEvent` se evalúa en tiempo de definición (no hay `from __future__ import annotations`) y DomainEvent no está importado"}
+      - {kind: command, cmd: "pytest tests/unit -q -o addopts=\"\" (worktree #25, deps instaladas)", output: "ERROR tests/unit/test_run_lifecycle.py - NameError: name 'DomainEvent' is not defined; ERROR tests/unit/test_run_failure_handling.py", note: "los dos tests de AC-01/AC-03 de US-AGENT-0001 no se pueden ni colectar"}
+    why_it_matters: "La story está marcada DONE y su servicio central no importa. Ningún test de la story ha pasado nunca."
+    root_cause: "Qwen generó el archivo sin ejecutar imports; el validador nunca corrió estos tests (VALIDATOR-pytest-broken-env)."
+    recommendation: "Añadir `from app.events.trading_run_events import DomainEvent` (o `from __future__ import annotations`). Solo si se decide rehacer US-AGENT-0001 sobre desarrollo-agentico."
+    owner_suggestion: qwen
+    delegable_to_local_model: partial
+    requires_human_decision: true
+    human_decision_question: "¿Se cierran los PRs #22-#25 y se rehacen las stories sobre desarrollo-agentico (recomendado) o se corrigen in situ?"
+    prerequisites: [PROCESS-branching-and-fork-strategy]
+    work_order: null
+    related: [STORY-done-with-red-ci, TEST-pr-tests-missing-fixtures]
+    effort: S
+  - id: SEC-runs-endpoint-unauthenticated-tenant-hardcoded
+    title: "Endpoints /runs sin autenticación, tenant fijo 'default-tenant' y GET sin filtro de tenant"
+    area: security
+    severity: S1
+    confidence: high
+    verification: executed
+    evidence:
+      - {kind: file, path: "app/api/v1/runs.py", lines: "22", note: "tenant_id: str = Depends(lambda: \"default-tenant\")"}
+      - {kind: file, path: "app/api/v1/runs.py", lines: "47-59", note: "get_run(run_id) → service.get_run(run_id) sin tenant → cualquier tenant lee cualquier run (viola US-API-0001 AC-03)"}
+      - {kind: file, path: "app/api/v1/runs.py", lines: "1-16", note: "no importa require_auth; get_db_session lanza NotImplementedError"}
+      - {kind: file, path: "app/api/v1/router.py", lines: "7-10", note: "solo incluye health_router: el router de runs no está montado"}
+      - {kind: command, cmd: "TestClient(create_app()).post('/api/v1/runs', json={...})", output: "404", note: "rutas registradas: /docs, /openapi.json, /redoc, /health"}
+    why_it_matters: >
+      Es el primer código de la plataforma que toca datos por tenant y fija el patrón que el modelo local repetirá:
+      sin auth, tenant hardcodeado y consultas sin filtro. Hoy no es explotable porque el router no está montado, pero
+      la story figura DONE.
+    root_cause: "Prompt de implementación sin contrato de seguridad (story-contract security_requirements no llega al modelo); ausencia de reviewer."
+    recommendation: >
+      Al rehacer US-AGENT-0001/US-API-0001: dependencia get_current_tenant() desde el JWT, `where(TradingRun.tenant_id
+      == tenant)` en todas las consultas, 404 para run de otro tenant, montar el router en api_v1_router y test
+      test_run_tenant_isolation con dos tenants.
+    owner_suggestion: sonnet
+    delegable_to_local_model: partial
+    requires_human_decision: false
+    human_decision_question: null
+    prerequisites: [SEC-jwt-secret-not-configurable, PROCESS-branching-and-fork-strategy]
+    work_order: null
+    related: [H-tenant-isolation-design, DOMAIN-live-mode-accepted-by-api-schema]
+    effort: M
+  - id: TEST-pr-tests-missing-fixtures
+    title: "Los tests de #23-#25 usan 8 fixtures que ningún conftest define: nunca han podido ejecutarse"
+    area: tests
+    severity: S1
+    confidence: high
+    verification: executed
+    evidence:
+      - {kind: file, path: "tests/conftest.py", lines: "1-15", note: "PR #25: solo sample_run_id y sample_correlation_id; el conftest upstream (67 líneas, claves dummy, aislamiento de config) fue reemplazado"}
+      - {kind: command, cmd: "grep -ohE '(db_settings|db_ready|migrated|app_client|sample_df|engine|db_engine|alembic_config)' tests/unit/*.py | sort | uniq -c", output: "alembic_config 3, app_client 10, db_engine 8, db_ready 7, db_settings 7, engine 26, migrated 5, sample_df 13", note: "ninguna definida"}
+      - {kind: command, cmd: "pytest tests/unit -q -o addopts=\"\" --continue-on-collection-errors (worktree #25)", output: "21 ERROR (fixture 'sample_df' not found ×6, 'app_client' ×5, 'db_engine' ×4, 'db_settings' ×3 …), 2 errores de colección", note: "con fastapi/sqlalchemy/pydantic/pyjwt/alembic/pandas instalados a mano"}
+    why_it_matters: >
+      Tres stories DONE cuyos tests no se han ejecutado jamás, ni en CI (deps ausentes) ni localmente (validador
+      roto). Los tests de #25 que sí corren usan AsyncMock como sesión, por lo que tampoco ejercitan el ORM.
+    root_cause: "El modelo reemplazó tests/conftest.py entero (LOOP-unrestricted-file-writes) y escribió tests contra fixtures imaginadas; nadie los ejecutó."
+    recommendation: >
+      Proteger tests/conftest.py (lista negra del escritor); exigir en el validador que required_tests existan y
+      pasen; al rehacer, un conftest por story con fixtures reales (SQLite in-memory + TestClient).
+    owner_suggestion: sonnet
+    delegable_to_local_model: "no"
+    requires_human_decision: false
+    human_decision_question: null
+    prerequisites: [LOOP-unrestricted-file-writes, VALIDATOR-pytest-broken-env]
+    work_order: null
+    related: [STORY-done-with-red-ci, PR-agent0001-orm-types-unpersistable]
+    effort: M
+  - id: PR-agent0001-orm-types-unpersistable
+    title: "Modelos ORM de TradingRun/TradeIntent no se pueden persistir: str en columnas Uuid, Numeric(4,4) para confidence, utcnow naive"
+    area: code
+    severity: S1
+    confidence: high
+    verification: executed
+    evidence:
+      - {kind: file, path: "app/models/trading_run.py", lines: "28-30,34-37,73", note: "columnas Uuid con default=lambda: str(uuid4()) y valores str para correlation_id/tenant_id"}
+      - {kind: command, cmd: "Session(sqlite).add(TradingRun(symbol='AAPL', mode=PAPER, tenant_id='0000…', correlation_id='1111…')).commit()", output: "StatementError (AttributeError) 'str' object has no attribute 'hex'", note: "primer flush real falla; los tests usan AsyncMock y nunca lo detectan"}
+      - {kind: file, path: "app/models/trading_run.py", lines: "81", note: "confidence Numeric(4, 4) → máximo 0.9999; el schema (app/schemas/trade_intent.py:16) admite 1.0 → overflow en PostgreSQL"}
+      - {kind: file, path: "app/models/trading_run.py", lines: "62,115", note: "datetime.utcnow() naive en columnas DateTime(timezone=True) (deprecado en 3.12)"}
+    why_it_matters: "El 'contrato pivotal' TradeIntent no sobrevive a un INSERT. Ejemplo canónico de defecto que pasa tests vacuos (mocks de sesión)."
+    root_cause: "Tests con sesión mockeada (test_run_lifecycle.py:14-21); sin test de persistencia real."
+    recommendation: >
+      Uuid con uuid.UUID (default=uuid.uuid4), Numeric(5,4) o Float para confidence, datetime.now(timezone.utc);
+      test obligatorio: crear y leer TradingRun + TradeIntent en SQLite in-memory con confidence=1.0.
+    owner_suggestion: qwen
+    delegable_to_local_model: partial
+    requires_human_decision: false
+    human_decision_question: null
+    prerequisites: [PR-agent0001-service-nameerror, ARCH-three-declarative-bases-no-migrations]
+    work_order: null
+    related: [H-money-time-calendar, TEST-pr-tests-missing-fixtures]
+    effort: S
+  - id: ARCH-three-declarative-bases-no-migrations
+    title: "Tres DeclarativeBase y dos modelos TradingRun para la misma tabla; trade_intents y market_data_ohlcv sin migración Alembic"
+    area: architecture
+    severity: S1
+    confidence: high
+    verification: executed
+    evidence:
+      - {kind: file, path: "app/db/base.py", lines: "8", note: "Base #1 (usada por app/db/models.py y alembic/env.py)"}
+      - {kind: file, path: "app/models/base.py", lines: "10", note: "Base #2 con MetaData() propia (app/models/trading_run.py)"}
+      - {kind: file, path: "app/dataflows/orm_models.py", lines: "12", note: "Base #3 (MarketDataOHLCV)"}
+      - {kind: file, path: "app/db/models.py", lines: "81", note: "TradingRun(id, tenant FK, analyst_reports) tabla trading_runs"}
+      - {kind: file, path: "app/models/trading_run.py", lines: "26", note: "otro TradingRun(run_id, error_message, trade_intent) MISMA tabla trading_runs, columnas distintas"}
+      - {kind: command, cmd: "grep -c 'trade_intents\\|market_data_ohlcv' alembic/versions/0001_initial_tables.py", output: "0", note: "las tablas de US-DATA-0001 y US-AGENT-0001 no existen en ninguna migración (viola NFR-MAINT-004 e invariante 27)"}
+    why_it_matters: "alembic upgrade head no crea lo que el código usa; dos definiciones de la misma tabla garantizan corrupción de esquema al primer autogenerate."
+    root_cause: "Cada story crea su propio Base porque el modelo no recibe el layout ni ve el código previo (LOOP-slm-context-starvation); sin ADR de layout."
+    recommendation: "ADR-PROPOSED-backend-layout: un solo Base en apps/api (o tradingagents/db), un solo paquete de modelos, una migración por story. Bloquear el merge de #24/#25 hasta entonces."
+    owner_suggestion: human
+    delegable_to_local_model: "no"
+    requires_human_decision: true
+    human_decision_question: "¿Layout canónico apps/api + migrations/ (docs y stories.yaml) o app/ + alembic/ (código generado)? Recomendación: apps/api + migrations/, un solo Base."
+    prerequisites: []
+    work_order: null
+    related: [ARCH-layout-and-frontend-duplication, DOCS-no-adrs]
+    effort: M
+  # ---------------------------------------------------------------- S2 ----
+  - id: TEST-md-story-id-us-api-0003-dangling
+    title: "initial-20-stories.md referencia US-API-0003 (inexistente): el test de trazabilidad fallará en cuanto se registren los marcadores"
+    area: tests
+    severity: S2
+    confidence: high
+    verification: executed
+    evidence:
+      - {kind: file, path: "docs/11-user-stories/initial-20-stories.md", lines: "35", note: "US-UI-0002 depende de US-API-0003 (no está en stories.yaml, que solo lista US-API-0001/0002)"}
+      - {kind: command, cmd: "pytest tests/architecture -q -o addopts=\"\"", output: "FAILED tests/architecture/test_traceability.py::test_md_story_ids_exist_in_yaml — 1 failed, 17 passed", note: "fallo oculto detrás del error de marcadores"}
+      - {kind: file, path: "docs/11-user-stories/initial-20-stories.md", lines: "35", note: "en PR #22 Qwen cambió US-API-0003→US-API-0001 en el doc humano para que el test pase, sin tocar stories.yaml ni la dependencia real (GET /portfolio)"}
+    why_it_matters: "Al arreglar CI-architecture-job-uncollectable el CI seguirá rojo por este test; y ya hay un precedente de 'arreglar' el test editando la documentación."
+    root_cause: "Los IDs de story del catálogo de requisitos y los 20 de stories.yaml no coinciden (ver REQ-traceability-broken)."
+    recommendation: "Decidir: (a) crear US-API-0003 'GET /api/v1/portfolio' en stories.yaml (recomendado, REQ-FUNC-0082 lo exige) o (b) quitar la dependencia en el md. Nunca cambiar el doc para que pase el test."
+    owner_suggestion: sonnet
+    delegable_to_local_model: "no"
+    requires_human_decision: true
+    human_decision_question: "¿Se añade US-API-0003 (GET /portfolio) a las stories (recomendado) o se elimina la dependencia de US-UI-0002?"
+    prerequisites: [CI-architecture-job-uncollectable]
+    work_order: null
+    related: [REQ-traceability-broken]
+    effort: S
+  - id: CI-lint-red-on-scripts
+    title: "El job ruff de CI falla en la propia rama de integración por 19 errores en scripts/ y tests/architecture"
+    area: ci
+    severity: S2
+    confidence: high
+    verification: executed
+    evidence:
+      - {kind: command, cmd: "ruff check . --statistics (83e315e)", output: "F541 ×9, I001 ×3, F401 ×3, SIM102 ×2, E722 ×1, SIM201 ×1 — Found 19 errors", note: "por archivo: autonomous_loop.py 10, validate_story.py 3, local_model.py 2, test_fitness.py 2, pr_creator.py 1, story_picker.py 1"}
+      - {kind: command, cmd: "GitHub job 108111273345 'ruff (strict, full repo)' run 36147223492", output: "Found 19 errors … Process completed with exit code 1", note: "PR #1"}
+      - {kind: file, path: "scripts/autonomous_loop.py", lines: "58", note: "bare except (E722) en pick_story"}
+    why_it_matters: "Toda rama feature nace de este código: cada PR hereda el job lint rojo (#25 acumula 119). 'CI verde' es inalcanzable sin tocar scripts/, que Qwen tiene prohibido."
+    root_cause: "Los scripts del control plane nunca pasaron por el propio lint del repo (ruff select E,W,F,I,B,UP,C4,SIM)."
+    recommendation: "ruff check scripts tests/architecture --fix + corregir a mano E722/SIM; añadir scripts/ al validador; commit del orquestador."
+    owner_suggestion: sonnet
+    delegable_to_local_model: "no"
+    requires_human_decision: false
+    human_decision_question: null
+    prerequisites: []
+    work_order: null
+    related: [STORY-done-with-red-ci, VALIDATOR-scope-mismatch]
+    effort: S
+  - id: DOCS-model-registry-drift
+    title: "model-registry.yaml ya no describe el código: max_tokens, timeout, prompt v1.0.0 y modelo orquestador desactualizados"
+    area: docs
+    severity: S2
+    confidence: high
+    verification: static-read
+    evidence:
+      - {kind: file, path: "docs/control-plane/model-registry.yaml", lines: "41-42", note: "story_implementer max_tokens 8192, timeout 300"}
+      - {kind: file, path: "scripts/local_model.py", lines: "22-23", note: "TIMEOUT 480, MAX_TOKENS 16384 (commit db9a85e)"}
+      - {kind: file, path: "docs/control-plane/model-registry.yaml", lines: "88-92", note: "implement_story_v1 version 1.0.0 sin bump aunque db9a85e añadió /no_think y recortó el contexto (local_model.py:106,98)"}
+      - {kind: file, path: "docs/control-plane/model-registry.yaml", lines: "48,57,66", note: "orquestador/reviewer/guardian = claude-sonnet-4-6; el informe base declara Haiku 4.5 y Sonnet 5; el auditor no está registrado"}
+    why_it_matters: "El registro es la base del reproducibility-contract (prompt_id/version). Si deriva a los 2 días, ninguna ejecución será reproducible."
+    root_cause: "No hay test ni check que compare registry ↔ código; el commit db9a85e cambió parámetros sin tocar el registro."
+    recommendation: "Actualizar registro (prompt 1.1.0, params reales, rol architect_auditor=claude-fable-5-1 con prompt architect_audit_v1) y añadir test de trazabilidad que lea los defaults de local_model.py y los compare con el registro."
+    owner_suggestion: sonnet
+    delegable_to_local_model: "no"
+    requires_human_decision: false
+    human_decision_question: null
+    prerequisites: []
+    work_order: null
+    related: [H-reproducibility-nondeterminism]
+    effort: S
+  - id: STORY-contract-schema-unenforced
+    title: "stories.yaml no cumple story-contract.schema.json y nada lo valida: el 'contrato formal' del control plane no está conectado"
+    area: story
+    severity: S2
+    confidence: high
+    verification: executed
+    evidence:
+      - {kind: command, cmd: "jsonschema Draft202012 story-contract.schema.json ← stories.yaml['US-INFRA-0001']", output: "13 errores: faltan acceptance_criteria, architecture_rules, definition_of_done, feature, merge_policy, objective, requirement_ids, scope, out_of_scope, security_requirements, observability_requirements; additionalProperties (status, pr_ref, …)", note: "igual para las 20 stories"}
+      - {kind: command, cmd: "grep -c 'requirement_ids\\|REQ-FUNC' docs/control-plane/stories.yaml", output: "0", note: "ninguna story enlaza requisitos"}
+      - {kind: file, path: "docs/control-plane/phase-0.5-gap-analysis.md", lines: "13,100-101", note: "control #2 'Story execution contract schema' marcado DONE y criterio 'dependency checks can be automated' ✅"}
+    why_it_matters: "Los campos que harían a Qwen fiable (objective, scope, out_of_scope, acceptance_criteria, security_requirements) no existen en el archivo que lee el loop; el schema es decorativo."
+    root_cause: "Se escribieron schema y datos por separado; test_traceability.py solo comprueba 10 campos propios."
+    recommendation: "Test de trazabilidad que valide cada story (con story_id/schema_version inyectados) contra el schema; migrar stories.yaml al contrato completo por lotes (5 stories por PR) empezando por las READY/BLUE."
+    owner_suggestion: sonnet
+    delegable_to_local_model: "no"
+    requires_human_decision: false
+    human_decision_question: null
+    prerequisites: [CI-architecture-job-uncollectable]
+    work_order: null
+    related: [LOOP-slm-context-starvation, REQ-traceability-broken]
+    effort: M
+  - id: REQ-traceability-broken
+    title: "39 de 59 REQ-FUNC apuntan a stories inexistentes y 9 de las 20 asignaciones existentes son semánticamente incorrectas"
+    area: requirements
+    severity: S2
+    confidence: high
+    verification: executed
+    evidence:
+      - {kind: command, cmd: "script: 'Historia relacionada' de functional-requirements.md vs claves de stories.yaml", output: "59 REQ con story; 39 → stories inexistentes (US-AGENT-0005..0009, US-DATA-0002..0006, US-EXEC-0001..0005, US-RISK-0003..0005, US-OMS-0002..0004, US-PORT-0002..0004, US-SEC-0002..0004, US-API-0003/0004, US-AUDIT-0002/0003, US-UI-0005/0006, US-LEARN-*, US-DEVCTL-*)", note: ""}
+      - {kind: file, path: "docs/01-requirements/functional-requirements.md", lines: "58-80", note: "REQ-FUNC-0010 (analista técnico)→US-AGENT-0001 (TradingRun); 0011 (fundamental)→US-AGENT-0002 (técnico); 0012→AGENT-0003; 0013→AGENT-0004"}
+      - {kind: file, path: "docs/01-requirements/functional-requirements.md", lines: "129-133,281-303", note: "REQ-FUNC-0022 (pérdida diaria)→US-RISK-0002 (Kill Switch); 0070 Panel→US-UI-0001 (design system); 0071→UI-0002; 0072→UI-0003; 0073→UI-0004"}
+      - {kind: file, path: "docs/README.md", lines: "30,56", note: "enlaza docs/integracion-slm.md y 01-requirements/traceability-matrix.md, que no existen"}
+    why_it_matters: "La cadena BIZ→REQ→US→TEST que promete el SoR no se puede construir: el catálogo de requisitos y el backlog usan numeraciones distintas."
+    root_cause: "Los IDs del catálogo se generaron antes de seleccionar las 20 stories y no se reconciliaron."
+    recommendation: "Renumerar 'Historia relacionada' contra stories.yaml (o añadir las stories futuras como DRAFT con ID reservado); generar la matriz FR↔US↔TEST con un script en CI; corregir enlaces rotos."
+    owner_suggestion: sonnet
+    delegable_to_local_model: "no"
+    requires_human_decision: false
+    human_decision_question: null
+    prerequisites: []
+    work_order: null
+    related: [STORY-contract-schema-unenforced, TEST-md-story-id-us-api-0003-dangling]
+    effort: M
+  - id: DOMAIN-live-mode-accepted-by-api-schema
+    title: "TradingRunCreate acepta mode='LIVE' sin guarda: viola US-API-0001 AC-04 y la política LiveModePolicy"
+    area: trading-safety
+    severity: S2
+    confidence: high
+    verification: executed
+    evidence:
+      - {kind: file, path: "app/schemas/trading_run.py", lines: "13", note: "Literal[\"PAPER\",\"BACKTEST\",\"SHADOW\",\"LIVE\"] = \"PAPER\" — default correcto, pero LIVE aceptado"}
+      - {kind: command, cmd: "TradingRunCreate(symbol='AAPL', mode='LIVE').mode", output: "LIVE", note: "sin error"}
+      - {kind: file, path: "docs/11-user-stories/initial-20-stories.md", lines: "633-636", note: "AC-04: POST /runs con 'live' → 400 'LIVE mode requires explicit confirmation'"}
+    why_it_matters: "Hoy no ejecuta nada, pero es el punto donde el modo LIVE entra al sistema; sin guarda ahora, la guarda tendrá que 'recordarse' más tarde."
+    root_cause: "El AC-04 vive en US-API-0001 (DRAFT) mientras el schema se creó en US-AGENT-0001; nadie conectó ambos."
+    recommendation: "Validator en TradingRunCreate: mode == LIVE → ValueError salvo flag explícito confirm_live=True y rol ADMIN; test test_live_mode_blocked."
+    owner_suggestion: qwen
+    delegable_to_local_model: partial
+    requires_human_decision: false
+    human_decision_question: null
+    prerequisites: [PR-agent0001-service-nameerror]
+    work_order: null
+    related: [SEC-runs-endpoint-unauthenticated-tenant-hardcoded]
+    effort: S
+  - id: PR-data0001-gap-validator-and-symbol-regex
+    title: "Ingesta OHLCV: rechaza toda semana con festivo (gap > 3 días naturales), ignora el vendor y rechaza tickers válidos"
+    area: data
+    severity: S2
+    confidence: high
+    verification: executed
+    evidence:
+      - {kind: file, path: "app/dataflows/validators.py", lines: "60-78", note: "gap_days > 3 con días naturales; viernes→martes tras festivo lunes = 4"}
+      - {kind: command, cmd: "validate_no_gaps(df[2024-01-11,12,16,17], 'AAPL')  # MLK 2024-01-15", output: "IngestionError DATA_GAP 'Gap of 4 calendar days between 2024-01-12 and 2024-01-16'", note: "≈10 falsos positivos al año en NYSE"}
+      - {kind: file, path: "app/dataflows/ingestion.py", lines: "45-62", note: "parámetro vendor ignorado: siempre _fetch_yfinance"}
+      - {kind: file, path: "app/dataflows/validators.py", lines: "15", note: "^[A-Z]{1,6}(\\.[A-Z0-9]{1,2})?$ rechaza BRK-B, 0700.HK, 600519.SS, BTC-USD que el README upstream soporta"}
+    why_it_matters: "AC-01 de US-DATA-0001 ('sin gaps en días de trading de NYSE') se cumple en el test (5 días sintéticos) y falla con datos reales; el primer año completo de AAPL no se ingiere."
+    root_cause: "Test con fixture sintética sin festivos; sin calendario de mercado."
+    recommendation: "Comparar contra días hábiles esperados (numpy.busdaycalendar con lista de festivos NYSE versionada en tests/fixtures) y permitir sufijos de mercado; propagar vendor al router upstream (dataflows/interface.py) en vez de duplicarlo."
+    owner_suggestion: qwen
+    delegable_to_local_model: "yes"
+    requires_human_decision: false
+    human_decision_question: null
+    prerequisites: [PROCESS-branching-and-fork-strategy]
+    work_order:
+      title: "Validación de huecos OHLCV por calendario de mercado"
+      suggested_story_id: US-FIX-0002
+      kind: fix
+      autonomy_risk: BLUE
+      goal: "validate_no_gaps solo señala huecos en días hábiles de NYSE esperados; los festivos y fines de semana no son huecos."
+      context_files: ["app/dataflows/validators.py", "app/dataflows/models.py", "tests/unit/test_ohlcv_valid_symbol.py"]
+      allowed_paths: ["app/dataflows/validators.py", "app/dataflows/market_calendar.py", "tests/unit/test_ohlcv_gaps.py", "tests/fixtures/nyse_holidays.json"]
+      forbidden_paths: ["pyproject.toml", "tests/conftest.py", ".github/**", "scripts/**", "docs/control-plane/**", "app/dataflows/ingestion.py"]
+      operations:
+        - {path: "app/dataflows/market_calendar.py", op: create, notes: "expected_trading_days(start, end, holidays) con numpy.busdaycalendar; sin dependencias nuevas"}
+        - {path: "app/dataflows/validators.py", op: replace, notes: "archivo de 78 líneas: entregar íntegro; validate_no_gaps usa expected_trading_days"}
+        - {path: "tests/fixtures/nyse_holidays.json", op: create, notes: "festivos NYSE 2023-2026"}
+        - {path: "tests/unit/test_ohlcv_gaps.py", op: create}
+      interfaces: |
+        def expected_trading_days(start: date, end: date, holidays: Sequence[date]) -> list[date]: ...
+        def validate_no_gaps(df: pd.DataFrame, symbol: str, holidays: Sequence[date] = ()) -> IngestionError | None: ...
+      behavior_spec:
+        - "Given barras vie 2024-01-12 y mar 2024-01-16 con festivo 2024-01-15, When validate_no_gaps, Then None"
+        - "Given barras 2024-01-08 y 2024-01-10 (falta el 9, hábil), When validate_no_gaps, Then IngestionError DATA_GAP con la fecha faltante"
+        - "Given df de un solo día, Then None"
+      tests_required:
+        - {path: "tests/unit/test_ohlcv_gaps.py", must_fail_before: true, cases: ["festivo lunes no es hueco", "día hábil faltante sí es hueco", "fin de semana largo (Acción de Gracias jue+vie parcial) no es hueco", "df vacío o 1 fila → None"]}
+      acceptance_checks: ["ruff check app/dataflows tests/unit/test_ohlcv_gaps.py", "pytest tests/unit/test_ohlcv_gaps.py -q"]
+      size_estimate: {files: 4, approx_loc: 160}
+      pitfalls: ["Solo aplicable si se rehace US-DATA-0001 en desarrollo-agentico; el escritor reemplaza archivos completos"]
+    related: [H-money-time-calendar, H-data-yfinance-licensing]
+    effort: S
+  - id: PR-infra0003-runtime-defects
+    title: "FastAPI skeleton: handler de errores con firma incorrecta (500), alembic env online roto, CORS '*' con credenciales"
+    area: code
+    severity: S2
+    confidence: high
+    verification: executed
+    evidence:
+      - {kind: file, path: "app/core/errors.py", lines: "21", note: "def app_error_handler(exc) — Starlette invoca handler(request, exc)"}
+      - {kind: command, cmd: "GET /boom que lanza AppError(418,'x','X') vía TestClient(raise_server_exceptions=False)", output: "500 Internal Server Error", note: "el cuerpo estructurado ErrorBody nunca se devuelve"}
+      - {kind: file, path: "alembic/env.py", lines: "50-64", note: "engine.url.resolve(...) no existe en SQLAlchemy 2 (hasattr → False); configure(url=…, connectable=…) sin conexión"}
+      - {kind: file, path: "app/main.py", lines: "37-43", note: "allow_origins=['*'] + allow_credentials=True: combinación que los navegadores rechazan y que anula CORS en un SaaS"}
+      - {kind: file, path: "alembic.ini", lines: "4", note: "DSN con usuario/contraseña de desarrollo en un archivo versionado (mismo patrón que app/db/config.py:14)"}
+    why_it_matters: "AC-03 de US-INFRA-0003 ('401 con mensaje estructurado') y AC-02/03 de US-INFRA-0002 (alembic upgrade/downgrade) no se cumplen aunque las stories estén DONE."
+    root_cause: "Sin ejecución real de la app ni de alembic; tests de migraciones dependen de fixtures inexistentes."
+    recommendation: "handler(request, exc); env.py con engine_from_config + connection.begin(); CORS con lista explícita; DSN solo por entorno."
+    owner_suggestion: qwen
+    delegable_to_local_model: partial
+    requires_human_decision: false
+    human_decision_question: null
+    prerequisites: [PROCESS-branching-and-fork-strategy, DEPS-undeclared-runtime-deps]
+    work_order: null
+    related: [SEC-jwt-secret-not-configurable]
+    effort: S
+  - id: TEST-fitness-relative-import-bypass
+    title: "Las fitness functions no detectan imports relativos ni importlib/__import__: la ley 'agents no importa execution' es eludible"
+    area: tests
+    severity: S2
+    confidence: high
+    verification: executed
+    evidence:
+      - {kind: file, path: "tests/architecture/test_fitness.py", lines: "28-42", note: "collect_imports usa node.module sin resolver node.level; ignora importlib.import_module y __import__"}
+      - {kind: command, cmd: "mutación: tradingagents/agents/leak.py con `from ..execution import broker_base`, importlib.import_module('tradingagents.execution'), __import__('tradingagents.oms') → assert_no_forbidden_import(agents, [execution, oms])", output: "imports colectados: ['execution', 'importlib'] → sin violación → el test PASARÍA con 3 fugas", note: "ejecutado con el módulo real de tests/architecture apuntando a un árbol temporal"}
+      - {kind: command, cmd: "ls tradingagents/risk/engine tradingagents/oms tradingagents/domain", output: "MISSING", note: "5 de los 8 tests de fitness pasan hoy de forma vacua (directorio inexistente → [])"}
+    why_it_matters: "Es la única barrera automática de la ley 1/2 de arquitectura y un modelo local que escriba `from ..execution import` (patrón habitual) la atraviesa. scripts/check_architecture.py (#22) tiene el mismo hueco."
+    root_cause: "Análisis AST sin resolver imports relativos ni cargas dinámicas."
+    recommendation: "Resolver level>0 con importlib.util.resolve_name(package=<módulo del archivo>); tratar importlib.import_module/__import__ con literal como import; añadir test de mutación (archivo temporal con fuga debe hacer fallar la función). Cambio en tests/architecture → solo orquestador con OK humano."
+    owner_suggestion: sonnet
+    delegable_to_local_model: "no"
+    requires_human_decision: true
+    human_decision_question: "¿Autoriza endurecer tests/architecture/test_fitness.py (solo añade detección; ninguna regla se relaja)?"
+    prerequisites: [CI-architecture-job-uncollectable]
+    work_order: null
+    related: [VALIDATOR-arch-check-weak]
+    effort: S
+  - id: LOOP-story-picker-deadlock
+    title: "Con stories.yaml actual el selector nunca devolverá una story: el loop está estructuralmente parado"
+    area: loop
+    severity: S2
+    confidence: high
+    verification: executed
+    evidence:
+      - {kind: command, cmd: "python scripts/story_picker.py --json-out", output: "{\"story_id\": null, \"message\": \"No stories ready…\"} exit 1", note: ""}
+      - {kind: file, path: "docs/control-plane/stories.yaml", lines: "92-93,152-153", note: "las únicas READY (US-INFRA-0002, US-SEC-0001) son YELLOW → story_picker.py:26 las excluye"}
+      - {kind: file, path: "docs/control-plane/stories.yaml", lines: "247,548", note: "US-AGENT-0002 y US-UI-0001 BLOCKED_AUTOMATION; todo GREEN/BLUE restante depende de ellas o de las YELLOW"}
+      - {kind: file, path: "scripts/story_picker.py", lines: "48", note: "orden alfabético (US-AGENT antes que US-INFRA), no topológico"}
+    why_it_matters: "Aunque se corrijan los S0, el loop arranca y termina en segundos ('All stories processed'). No existe transición DRAFT→READY automatizada ni mecanismo de aprobación humana de YELLOW."
+    root_cause: "Dependencias del backlog pasan por dos stories YELLOW (DB y auth) que el loop no puede tomar; sin cola de aprobación."
+    recommendation: "Añadir estado APPROVED_FOR_AUTOMATION (o campo human_approved: true) que el picker acepte para YELLOW; picker en orden topológico; ejecutar US-INFRA-0002 con supervisión humana como primera acción tras arreglar la maquinaria."
+    owner_suggestion: sonnet
+    delegable_to_local_model: "no"
+    requires_human_decision: true
+    human_decision_question: "¿Aprueba que US-INFRA-0002 (YELLOW) se implemente con supervisión humana directa como desbloqueo del backlog?"
+    prerequisites: [LOOP-unrestricted-file-writes, LOOP-branch-contamination]
+    work_order: null
+    related: [LOOP-no-success-writeback]
+    effort: S
+  # ---------------------------------------------------------------- S3 ----
+  - id: DOCS-enum-drift-mode-action
+    title: "Enumeraciones de modo y acción difieren entre domain-model, event-contracts y reproducibility-contract"
+    area: docs
+    severity: S3
+    confidence: high
+    verification: static-read
+    evidence:
+      - {kind: file, path: "docs/control-plane/event-contracts.yaml", lines: "184,191", note: "mode [PAPER, BACKTEST, LIVE] sin SHADOW; action [BUY, SELL, HOLD] sin SELL_SHORT/BUY_TO_COVER"}
+      - {kind: file, path: "docs/control-plane/reproducibility-contract.yaml", lines: "78", note: "run_mode [PAPER, BACKTEST, LIVE] sin SHADOW"}
+      - {kind: file, path: "docs/03-domain/domain-model.md", lines: "24,51", note: "TradingMode BACKTEST|PAPER|SHADOW|LIVE; IntentAction con SELL_SHORT/BUY_TO_COVER"}
+    why_it_matters: "El modo SHADOW es el paso obligatorio antes de LIVE (roadmap Fase 7); si el contrato de eventos no lo admite, el primer evento en SHADOW será inválido."
+    root_cause: "Documentos escritos en batches sin fuente única de enums."
+    recommendation: "Un solo archivo de enums (docs/03-domain o código) referenciado por los contratos; test de trazabilidad que compare."
+    owner_suggestion: sonnet
+    delegable_to_local_model: "no"
+    requires_human_decision: false
+    human_decision_question: null
+    prerequisites: []
+    work_order: null
+    related: [H-reproducibility-nondeterminism]
+    effort: S
+  - id: OPS-dashboard-shows-mock-data
+    title: "El dashboard de desarrollo no puede leer stories.yaml desde apps/web y muestra datos de ejemplo con 4 DONE fijos"
+    area: ops
+    severity: S3
+    confidence: high
+    verification: executed
+    evidence:
+      - {kind: file, path: "apps/web/dev-dashboard.html", lines: "330,336", note: "fetch('../../../docs/control-plane/stories.yaml') y fallback 'Using mock data for demo'"}
+      - {kind: command, cmd: "python -m http.server 8899 en apps/web; curl /../../../docs/control-plane/stories.yaml", output: "404 (dev-dashboard.html → 200)", note: "http.server normaliza '..' dentro de su raíz; los .ps1/.bat sirven desde apps/web"}
+      - {kind: file, path: "apps/web/dev-dashboard.html", lines: "371-376", note: "mock con US-INFRA-0001/0003, US-DATA-0001, US-AGENT-0001 en DONE: origen del '4/20 DONE'"}
+    why_it_matters: "La única vista de progreso del proyecto muestra datos inventados; alimentó afirmaciones falsas del orquestador (informe base §1)."
+    root_cause: "Ruta relativa que escapa de la raíz del servidor estático."
+    recommendation: "Servir desde la raíz del repo (`python -m http.server -d .`) y usar '/docs/control-plane/stories.yaml'; eliminar el mock o marcarlo visiblemente como demo."
+    owner_suggestion: sonnet
+    delegable_to_local_model: "no"
+    requires_human_decision: false
+    human_decision_question: null
+    prerequisites: []
+    work_order: null
+    related: [OPS-dashboard-not-persistent, DATA-stories-yaml-mojibake]
+    effort: S
+  - id: DOCS-frontend-spec-wrong-broker
+    title: "La spec del Command Center describe Alpaca/Binance y un plan de $99/mes, contra ADR-0007 (Schwab) y la visión"
+    area: docs
+    severity: S3
+    confidence: high
+    verification: static-read
+    evidence:
+      - {kind: file, path: "docs/AM-TRADINGAGENTS-FRONTEND-SPEC.md", lines: "249,309,313,501", note: "'Card activa: Alpaca', 'Alpaca (seleccionado)', 'Binance', 'Broker selector (Alpaca pre-seleccionado)'"}
+      - {kind: file, path: "docs/AM-TRADINGAGENTS-FRONTEND-SPEC.md", lines: "264", note: "'Plan Pro · $99/mes' sin decisión de negocio registrada"}
+      - {kind: file, path: "docs/12-adr/README.md", lines: "378-383", note: "ADR-0007: conexión directa Schwab; PaperBroker por defecto"}
+    why_it_matters: "US-UI-0004 (onboarding paso 3 'conectar broker') se implementaría contra un broker que el proyecto no usa."
+    root_cause: "Spec de diseño anterior a las decisiones de arquitectura."
+    recommendation: "Sustituir Alpaca/Binance por Paper/Schwab en la spec; mover precios a un doc de negocio."
+    owner_suggestion: human
+    delegable_to_local_model: "no"
+    requires_human_decision: false
+    human_decision_question: null
+    prerequisites: []
+    work_order: null
+    related: [ARCH-layout-and-frontend-duplication]
+    effort: S
+  - id: PR-infra0001-fitness-test-uncollectable
+    title: "El test de AC-03 de US-INFRA-0001 (#22) no se puede colectar: carga check_architecture.py con exec_module sin registrarlo en sys.modules"
+    area: tests
+    severity: S3
+    confidence: high
+    verification: executed
+    evidence:
+      - {kind: file, path: "tests/unit/test_architecture_fitness.py", lines: "21-25", note: "PR #22: spec_from_file_location + exec_module; el script usa @dataclass con `from __future__ import annotations` (scripts/check_architecture.py:12,46)"}
+      - {kind: command, cmd: "pytest tests/unit -q (worktree #22)", output: "ERROR tests/unit/test_architecture_fitness.py - AttributeError: 'NoneType' object has no attribute '__dict__' (dataclasses resuelve sys.modules[cls.__module__])", note: ""}
+    why_it_matters: "La story presume de 'architecture fitness function funciona' y su propio test nunca corrió; CI de #22 falla en tests por esto además del pyproject."
+    root_cause: "Carga dinámica de un script como módulo sin sys.modules[name] = module."
+    recommendation: "No aplica si #22 se cierra; si se rehace, colocar la lógica en un paquete importable (tests/architecture ya la tiene)."
+    owner_suggestion: human
+    delegable_to_local_model: "no"
+    requires_human_decision: false
+    human_decision_question: null
+    prerequisites: [PR-infra0001-breaks-upstream]
+    work_order: null
+    related: [STORY-contract-noncompliance-done]
+    effort: S
+  - id: TEST-upstream-suite-network-dependent
+    title: "Un test upstream requiere Yahoo Finance en vivo: la suite no es verde sin red"
+    area: tests
+    severity: S3
+    confidence: high
+    verification: executed
+    evidence:
+      - {kind: command, cmd: "pytest tests --ignore=tests/architecture -q (venv, sin acceso a Yahoo)", output: "945 passed, 1 failed: tests/test_no_data_handling.py::TestLoadOhlcvNoPoison::test_empty_download_raises_and_does_not_cache — VendorRateLimitError: Yahoo Finance is unreachable", note: ""}
+      - {kind: file, path: "docs/control-plane/test-data-strategy.md", lines: "1067", note: "regla 1: ningún test puede alcanzar una URL externa"}
+    why_it_matters: "La línea base 'verde' depende de la red; en un validador local con -x este test detiene toda la suite (validate_story.py:80)."
+    root_cause: "Test upstream sin mock de red."
+    recommendation: "Marcar como integration (o mockear yfinance) en un parche mínimo aditivo; excluir tests de red del validador local."
+    owner_suggestion: sonnet
+    delegable_to_local_model: "no"
+    requires_human_decision: false
+    human_decision_question: null
+    prerequisites: []
+    work_order: null
+    related: [ENV-dev-environment-incomplete, VALIDATOR-pytest-broken-env]
+    effort: S
+  - id: PROCESS-architect-reports-dir-gitignored
+    title: "La carpeta de informes del auditor (docs/architect-reports/reports/) está ignorada por el .gitignore upstream"
+    area: process
+    severity: S3
+    confidence: high
+    verification: executed
+    evidence:
+      - {kind: file, path: ".gitignore", lines: "221-223", note: "regla upstream `reports/` (informes generados de TradingAgents) que también captura docs/architect-reports/reports/"}
+      - {kind: command, cmd: "git check-ignore -v docs/architect-reports/reports/2026-09-25/2026-09-25_1421_WEEKLY_MAX.md", output: ".gitignore:223:reports/", note: "los dos archivos de esta corrida no aparecen en git status; se añadieron con `git add -f`"}
+    why_it_matters: "Cada corrida futura fallará en la entrega (§8.3 del prompt) si el auditor sigue el protocolo al pie de la letra: `git add` sin -f no añade nada y el commit queda vacío."
+    root_cause: "El protocolo eligió un nombre de carpeta que colisiona con una regla de .gitignore heredada del upstream."
+    recommendation: "Orquestador: añadir `!docs/architect-reports/reports/` (negación) al final de .gitignore en un commit propio, o renombrar la carpeta a docs/architect-reports/runs/ y actualizar README/prompt v1.1."
+    owner_suggestion: sonnet
+    delegable_to_local_model: "no"
+    requires_human_decision: false
+    human_decision_question: null
+    prerequisites: []
+    work_order: null
+    related: []
+    effort: S
+adr_proposals:
+  - id: ADR-PROPOSED-backend-layout
+    title: "Layout canónico del backend y de la persistencia"
+    context: "Coexisten apps/api (docs, stories.yaml, component-ownership) y app/ (código generado en #23-#25); alembic/ vs migrations/; tres DeclarativeBase; dos modelos TradingRun para la misma tabla."
+    options: ["A: apps/api + migrations/ + tradingagents/db (Base único), como dice el SoR", "B: adoptar app/ + alembic/ y actualizar stories.yaml, docs y component-ownership"]
+    recommendation: "A. El SoR ya lo especifica y allowed_modules lo hace cumplir; B obliga a reescribir 4 documentos y perpetúa un layout que nació por accidente."
+    consequences: "Cerrar #23-#25; el primer PR real de infraestructura crea tradingagents/db/base.py (Base único) y migrations/env.py; todo modelo nuevo hereda de ese Base y trae su migración."
+  - id: ADR-PROPOSED-integration-branch-and-upstream
+    title: "desarrollo-agentico como rama de integración; main como espejo de upstream"
+    context: "Los PRs de story apuntan a main (pr_creator.py:136); dev-loop.md vuelve a main; CLAUDE.md declara desarrollo-agentico activo; PR #1 (95 archivos) sigue abierto."
+    options: ["A: base de PRs = desarrollo-agentico; main solo recibe merges de upstream y releases", "B: fusionar PR #1 en main y trabajar sobre main"]
+    recommendation: "A, con política de upstream: cambios a archivos upstream solo aditivos (pyproject extras/markers, nunca reemplazo), merge de TauricResearch/main por PR trimestral con la suite verde."
+    consequences: "pr_creator y dev-loop apuntan a desarrollo-agentico; PR #1 se divide (docs primero) o se cierra al converger."
+  - id: ADR-PROPOSED-single-frontend
+    title: "Un solo frontend: apps/web"
+    context: "frontend/ (25 archivos, TSX con errores de sintaxis), src/ (9) y apps/web (dashboard estático) conviven sin package.json."
+    options: ["A: apps/web es el Command Center (stories.yaml ya lo dice); borrar frontend/ y src/", "B: mantener borradores como referencia"]
+    recommendation: "A. Los borradores no compilan y contaminan el contexto del modelo local."
+    consequences: "Commit de limpieza del orquestador; US-UI-0001 se rehace en apps/web con package.json y vitest."
+story_proposals:
+  - story_id: US-INFRA-0001
+    problem: "Como una sola story, Qwen reescribió pyproject.toml y __init__.py upstream y creó un paquete que tapa a portfolio.py; el contrato mezcla config de tooling (prohibido a Qwen) con scaffolding."
+    proposed_split:
+      - {id: US-INFRA-0001a, title: "Registrar marcadores pytest + pytest-timeout + lint de scripts (aditivo, orquestador)", allowed_modules: ["pyproject.toml", "scripts/"], required_tests: ["tests/architecture/"], depends_on: [], autonomy_risk: YELLOW}
+      - {id: US-INFRA-0001b, title: "Esqueleto de paquetes risk/, oms/, events/, learning/, apps/api, migrations/ (SIN tradingagents/portfolio/: ya existe portfolio.py)", allowed_modules: ["tradingagents/risk/", "tradingagents/oms/", "tradingagents/events/", "tradingagents/learning/", "apps/api/", "migrations/", "tests/unit/"], required_tests: ["tests/unit/test_repository_structure.py"], depends_on: ["US-INFRA-0001a"], autonomy_risk: GREEN}
+  - story_id: US-AGENT-0001
+    problem: "Mezcla API (POST /runs), ORM, eventos y schema Pydantic en 13 archivos; produjo dos TradingRun y un servicio que no importa."
+    proposed_split:
+      - {id: US-AGENT-0001a, title: "TradeIntent y TradingRun como modelos de dominio Pydantic con invariantes (sin DB)", allowed_modules: ["tradingagents/domain/", "tests/unit/domain/"], required_tests: ["tests/unit/domain/test_trade_intent.py", "tests/unit/domain/test_trading_run.py"], depends_on: ["US-INFRA-0001b"], autonomy_risk: BLUE}
+      - {id: US-AGENT-0001b, title: "Persistencia de TradingRun/TradeIntent (Base único) + migración", allowed_modules: ["tradingagents/db/models/", "migrations/versions/", "tests/unit/db/"], required_tests: ["tests/unit/db/test_trading_run_persistence.py"], depends_on: ["US-INFRA-0002", "US-AGENT-0001a"], autonomy_risk: YELLOW}
+handoff_for_next_run:
+  - "since_sha para la próxima corrida: 83e315e3713b3734c59c72cc9c97bf8925a561ea. Si el orquestador ha ingerido este informe, verificar primero los fixed_pending_verify del ledger."
+  - "Reverificar CI-architecture-job-uncollectable comprobando el run de CI más reciente de desarrollo-agentico (PR #1): los jobs tests/secret-scan deben dejar de morir en la colección; después esperar el fallo de test_md_story_ids_exist_in_yaml."
+  - "Si aparece un PR nuevo del loop: comprobar base=desarrollo-agentico, que no toque tests/conftest.py ni pyproject.toml, y que sus required_tests existan y corran (fixtures)."
+  - "Comprobar si stories.yaml volvió a tener mojibake (10 líneas hoy) y si story_picker.py:34 ya usa encoding='utf-8'."
+  - "Repetir el mutation test de tests/architecture/test_fitness.py (import relativo) si se endureció; debe detectar 3 fugas."
+  - "Pedir al humano evidencia de Windows: salida de `python scripts/validate_story.py --story X | cat` (tubería) para confirmar VALIDATOR-unicode-exit-on-windows en su máquina."
+  - "prod-desarrollo-agentico sigue fuera de alcance por decisión del humano; si entra, auditar primero supabase/migrations (schema sin Alembic ni ADR) y el worker."
+  - "La suite upstream tiene 1 test dependiente de red (Yahoo); no tratarlo como regresión."
