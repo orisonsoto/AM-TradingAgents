@@ -1,0 +1,330 @@
+# Ledger de hallazgos del Arquitecto y Auditor Independiente.
+# Estado vivo de cada hallazgo. Lo escribe SOLO el orquestador (Claude Code / Sonnet).
+# El auditor (Fable) no lo edita: emite veredictos en reports/<fecha>/<run_id>.findings.yaml (bloque `recheck`).
+#
+# Estados:
+#   open                  registrado, sin triage
+#   triaged               reproducido por el orquestador; severidad y owner confirmados
+#   in_progress           work order / story de fix en curso
+#   fixed_pending_verify  fix mergeado; espera veredicto `resolved_verified` de la próxima corrida
+#   resolved              verificado por el auditor con evidencia
+#   rejected              falso positivo o no aplica; el motivo va en `notes` (obligatorio)
+#   superseded            absorbido por otro hallazgo; `superseded_by` obligatorio
+#
+# Campos: id, title, severity (S0..S4 | H), area, status, source (informe/corrida que lo introdujo),
+#         last_recheck (run_id del último veredicto del auditor, o null), owner (qwen|sonnet|human|fable|ci|null), notes.
+schema_version: "1.0"
+updated_at: "2026-09-25"
+updated_by: "Claude Code (orquestador) — creación de la línea base"
+findings:
+  # ---- S0 -------------------------------------------------------------------
+  - id: PR-infra0001-breaks-upstream
+    title: "El PR #22 reemplaza pyproject.toml y vacía tradingagents/__init__.py: rompe la instalación, el CLI y el motor"
+    severity: S0
+    area: code
+    status: open
+    source: INFORME-BASE-2026-09-24
+    last_recheck: null
+    owner: human
+    notes: "Decisión humana: no mergear; rehacer la story de forma aditiva."
+  - id: LOOP-unrestricted-file-writes
+    title: "local_model.py escribe cualquier ruta que emita el modelo, sin lista blanca ni rutas protegidas"
+    severity: S0
+    area: loop
+    status: open
+    source: INFORME-BASE-2026-09-24
+    last_recheck: null
+    owner: sonnet
+    notes: ""
+  - id: LOOP-branch-contamination
+    title: "pr_creator.py ramifica desde el HEAD actual y hace git add de todo el árbol: PRs apilados y archivos ajenos"
+    severity: S0
+    area: loop
+    status: open
+    source: INFORME-BASE-2026-09-24
+    last_recheck: null
+    owner: sonnet
+    notes: ""
+  - id: LOOP-no-success-writeback
+    title: "Tras crear un PR el loop no actualiza stories.yaml; la story se reelige y termina BLOCKED_AUTOMATION"
+    severity: S0
+    area: loop
+    status: open
+    source: INFORME-BASE-2026-09-24
+    last_recheck: null
+    owner: sonnet
+    notes: ""
+  # ---- S1 -------------------------------------------------------------------
+  - id: STORY-done-with-red-ci
+    title: "Stories marcadas DONE cuyos PRs (#22–#25) tienen CI en rojo y no están mergeados"
+    severity: S1
+    area: process
+    status: open
+    source: INFORME-BASE-2026-09-24
+    last_recheck: null
+    owner: sonnet
+    notes: ""
+  - id: CI-architecture-job-uncollectable
+    title: "pytest -m architecture falla en la colección: marcadores no registrados con --strict-markers"
+    severity: S1
+    area: ci
+    status: open
+    source: INFORME-BASE-2026-09-24
+    last_recheck: null
+    owner: sonnet
+    notes: ""
+  - id: VALIDATOR-pytest-broken-env
+    title: "validate_story.py usa --timeout sin pytest-timeout y nunca selecciona ni verifica required_tests"
+    severity: S1
+    area: validator
+    status: open
+    source: INFORME-BASE-2026-09-24
+    last_recheck: null
+    owner: sonnet
+    notes: ""
+  - id: ENV-dev-environment-incomplete
+    title: "Sin venv reproducible: 62 errores de colección por dependencias ausentes; no hay línea base verde"
+    severity: S1
+    area: env
+    status: open
+    source: INFORME-BASE-2026-09-24
+    last_recheck: null
+    owner: human
+    notes: ""
+  - id: DEPS-undeclared-runtime-deps
+    title: "El código de #23–#25 importa fastapi, sqlalchemy, pydantic, jwt sin declararlos en pyproject/requirements"
+    severity: S1
+    area: deps
+    status: open
+    source: INFORME-BASE-2026-09-24
+    last_recheck: null
+    owner: sonnet
+    notes: ""
+  - id: LOOP-fix-loop-blind
+    title: "El fix-loop pasa stderr como prompt, pero el validador imprime los fallos por stdout"
+    severity: S1
+    area: loop
+    status: open
+    source: INFORME-BASE-2026-09-24
+    last_recheck: null
+    owner: sonnet
+    notes: ""
+  - id: LOOP-no-failure-evidence
+    title: "Salida de subprocesos descartada al fallar; checkpoint.py sin usar; .orchestrator/ vacío"
+    severity: S1
+    area: loop
+    status: open
+    source: INFORME-BASE-2026-09-24
+    last_recheck: null
+    owner: sonnet
+    notes: ""
+  - id: LOOP-slm-context-starvation
+    title: "Qwen recibe 1.500 caracteres de contexto y la prosa de la story, no el contrato de stories.yaml"
+    severity: S1
+    area: llm-agents
+    status: open
+    source: INFORME-BASE-2026-09-24
+    last_recheck: null
+    owner: sonnet
+    notes: ""
+  - id: STORY-contract-noncompliance-done
+    title: "Las stories DONE incumplen allowed_modules y required_tests de su propio contrato"
+    severity: S1
+    area: story
+    status: open
+    source: INFORME-BASE-2026-09-24
+    last_recheck: null
+    owner: sonnet
+    notes: ""
+  - id: LOOP-no-independent-review
+    title: "El flujo Dev → Reviewer → Guardian documentado no existe en autonomous_loop.py"
+    severity: S1
+    area: process
+    status: open
+    source: INFORME-BASE-2026-09-24
+    last_recheck: null
+    owner: sonnet
+    notes: ""
+  - id: LOOP-issues-closed-falsely
+    title: "close_issue() se llama en rutas de fallo y skip; los 20 issues están cerrados"
+    severity: S1
+    area: loop
+    status: open
+    source: INFORME-BASE-2026-09-24
+    last_recheck: null
+    owner: human
+    notes: "Reabrir requiere acción humana en GitHub."
+  - id: SEC-jwt-secret-not-configurable
+    title: "Settings(BaseModel) no lee el entorno; jwt_secret fijo 'change-me-in-production'; str(exc) al cliente"
+    severity: S1
+    area: security
+    status: open
+    source: INFORME-BASE-2026-09-24
+    last_recheck: null
+    owner: qwen
+    notes: "Work order propuesto en PROMPT-ARQUITECTO-FABLE.md §8.2 (ejemplo)."
+  # ---- S2 -------------------------------------------------------------------
+  - id: VALIDATOR-scope-mismatch
+    title: "ruff/mypy del validador apuntan a tradingagents/ y apps/, no a app/; ruff --fix toca archivos ajenos"
+    severity: S2
+    area: validator
+    status: open
+    source: INFORME-BASE-2026-09-24
+    last_recheck: null
+    owner: sonnet
+    notes: ""
+  - id: VALIDATOR-arch-check-weak
+    title: "Chequeo de arquitectura por subcadenas; duplica en peor versión a tests/architecture/test_fitness.py"
+    severity: S2
+    area: validator
+    status: open
+    source: INFORME-BASE-2026-09-24
+    last_recheck: null
+    owner: sonnet
+    notes: ""
+  - id: TEST-secret-scan-blind-spot
+    title: "test_no_hardcoded_secrets_patterns solo recorre tradingagents/**/*.py"
+    severity: S2
+    area: tests
+    status: open
+    source: INFORME-BASE-2026-09-24
+    last_recheck: null
+    owner: sonnet
+    notes: ""
+  - id: DATA-stories-yaml-mojibake
+    title: "stories.yaml con doble codificación; story_picker abre sin encoding; yaml.dump reserializa sin lock"
+    severity: S2
+    area: data
+    status: open
+    source: INFORME-BASE-2026-09-24
+    last_recheck: null
+    owner: sonnet
+    notes: ""
+  - id: DOCS-no-adrs
+    title: "docs/12-adr/ solo tiene un índice; decisiones de facto sin ADR"
+    severity: S2
+    area: docs
+    status: open
+    source: INFORME-BASE-2026-09-24
+    last_recheck: null
+    owner: human
+    notes: ""
+  - id: ARCH-layout-and-frontend-duplication
+    title: "Tres layouts de backend y tres UIs sin canon ni ADR"
+    severity: S2
+    area: architecture
+    status: open
+    source: INFORME-BASE-2026-09-24
+    last_recheck: null
+    owner: human
+    notes: ""
+  - id: PROCESS-branching-and-fork-strategy
+    title: "PRs de story apuntan a main (espejo upstream); sin rama de integración definida ni política de upstream"
+    severity: S2
+    area: process
+    status: open
+    source: INFORME-BASE-2026-09-24
+    last_recheck: null
+    owner: human
+    notes: ""
+  # ---- S3 -------------------------------------------------------------------
+  - id: LOOP-blind-retries
+    title: "run() reintenta una vez cualquier comando fallido, incluidos git push y gh issue close"
+    severity: S3
+    area: loop
+    status: open
+    source: INFORME-BASE-2026-09-24
+    last_recheck: null
+    owner: sonnet
+    notes: ""
+  - id: LOOP-pr-metadata-wrong
+    title: "Co-Authored-By fijo 'Claude Sonnet 4.6'; título del PR derivado del ID y no de la story"
+    severity: S3
+    area: loop
+    status: open
+    source: INFORME-BASE-2026-09-24
+    last_recheck: null
+    owner: sonnet
+    notes: ""
+  - id: CI-mypy-non-blocking
+    title: "ci.yml ejecuta mypy con || true"
+    severity: S3
+    area: ci
+    status: open
+    source: INFORME-BASE-2026-09-24
+    last_recheck: null
+    owner: sonnet
+    notes: ""
+  - id: OPS-dashboard-not-persistent
+    title: "Servicio del dashboard no instalado; puerto 8888 caído; lee un stories.yaml no fiable"
+    severity: S3
+    area: ops
+    status: open
+    source: INFORME-BASE-2026-09-24
+    last_recheck: null
+    owner: human
+    notes: "Solo verificable en la máquina Windows del operador."
+  # ---- Hipótesis de dominio (sin código aún) ----------------------------------
+  - id: H-data-yfinance-licensing
+    title: "Dependencia de yfinance (extractor no oficial) para un SaaS comercial"
+    severity: H
+    area: data
+    status: open
+    source: INFORME-BASE-2026-09-24
+    last_recheck: null
+    owner: human
+    notes: "No es asesoría legal: requiere revisión humana."
+  - id: H-agent-prompt-injection-via-news
+    title: "Inyección indirecta de prompts hacia los agentes vía noticias, redes y fundamentales"
+    severity: H
+    area: security
+    status: open
+    source: INFORME-BASE-2026-09-24
+    last_recheck: null
+    owner: fable
+    notes: ""
+  - id: H-risk-oms-toctou-idempotency
+    title: "Carrera Risk Engine ↔ OMS, órdenes duplicadas por reintentos, kill switch que falle abierto"
+    severity: H
+    area: trading-safety
+    status: open
+    source: INFORME-BASE-2026-09-24
+    last_recheck: null
+    owner: fable
+    notes: ""
+  - id: H-tenant-isolation-design
+    title: "Modelo multi-tenant: RLS vs filtrado en aplicación; contenido de los claims JWT"
+    severity: H
+    area: security
+    status: open
+    source: INFORME-BASE-2026-09-24
+    last_recheck: null
+    owner: fable
+    notes: ""
+  - id: H-money-time-calendar
+    title: "float vs Decimal; zonas horarias; calendario de mercado; splits y dividendos"
+    severity: H
+    area: trading-safety
+    status: open
+    source: INFORME-BASE-2026-09-24
+    last_recheck: null
+    owner: fable
+    notes: ""
+  - id: H-reproducibility-nondeterminism
+    title: "Reproducibilidad de decisiones LLM y DecisionTrace sin chain-of-thought"
+    severity: H
+    area: architecture
+    status: open
+    source: INFORME-BASE-2026-09-24
+    last_recheck: null
+    owner: fable
+    notes: ""
+  - id: H-upstream-drift
+    title: "Política para integrar futuras versiones de TradingAgents sin romper tradingagents/"
+    severity: H
+    area: process
+    status: open
+    source: INFORME-BASE-2026-09-24
+    last_recheck: null
+    owner: human
+    notes: ""
